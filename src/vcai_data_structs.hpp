@@ -159,6 +159,52 @@ struct BasicString {
             data[i] = str[i];  // NOLINT pointer arithmetic
     }
 
+    // Правило 5
+    constexpr BasicString(const BasicString &other) noexcept {
+        auto len{other.size()};
+        reserve(len);
+        m_size = len;
+
+        for (vcai::size i{}; i < m_size; ++i)
+            data[i] = other[i];  // NOLINT pointer arithmetic
+    }
+    constexpr BasicString(BasicString &&other) noexcept
+        : data(other.data), m_size(other.size()), m_capacity(other.capacity()) {
+        other.data = nullptr;
+        other.m_size = 0;
+        other.m_capacity = 0;
+    }
+    constexpr auto operator=(const BasicString &other) noexcept -> auto & {
+        if (&other != this) {
+            if (m_capacity > 0) {
+                delete[](data);
+                m_capacity = 0;
+            }
+
+            auto len{other.size()};
+            reserve(len);
+            m_size = len;
+
+            for (vcai::size i{}; i < m_size; ++i)
+                data[i] = other[i];  // NOLINT pointer arithmetic
+        }
+        return *this;
+    }
+    constexpr auto operator=(BasicString &&other) noexcept -> auto & {
+        if (&other != this) {
+            if (m_capacity > 0) delete[](data);
+
+            data = other.data;
+            m_size = other.m_size;
+            m_capacity = other.m_capacity;
+
+            other.data = nullptr;
+            other.m_size = 0;
+            other.m_capacity = 0;
+        }
+        return *this;
+    }
+
     constexpr ~BasicString() noexcept {
         if (m_capacity > 0) delete[](data);
     }
