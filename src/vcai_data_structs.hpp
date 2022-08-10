@@ -4,7 +4,7 @@
 
 namespace vcai {
 
-template <typename Contained, size Size>
+template <typename Contained, vcai::size Size>
 struct StaticArray {
     [[nodiscard]] constexpr auto size() const noexcept { return Size; }
 
@@ -57,6 +57,8 @@ struct DynamicArray {
             m_capacity = amount;
         }
     }
+
+    constexpr auto clear() noexcept -> void { m_size = 0; }
 
     [[nodiscard]] constexpr auto size() const noexcept { return m_size; }
     [[nodiscard]] constexpr auto capacity() const noexcept {
@@ -119,6 +121,17 @@ DynamicArray(Elem1, Elems...) -> DynamicArray<Elem1>;
 
 template <typename CharType>
 struct BasicString {
+    constexpr auto push_back(const CharType &elem) noexcept -> void {
+        if (m_size == m_capacity) {
+            if (m_capacity > 0)
+                reserve(m_capacity * 2);
+            else
+                reserve(1);
+        }
+        data[m_size] = elem;  // NOLINT pointer arithmetic
+        ++m_size;
+    }
+
     constexpr auto reserve(const vcai::size &amount) noexcept -> void {
         if (amount > m_capacity) {
             auto new_data{new CharType[amount]};
@@ -133,6 +146,10 @@ struct BasicString {
             m_capacity = amount;
         }
     }
+
+    constexpr auto clear() noexcept -> void { m_size = 0; }
+
+    constexpr auto is_empty() noexcept -> bool { return m_size == 0; }
 
     [[nodiscard]] constexpr auto size() const noexcept { return m_size; }
     [[nodiscard]] constexpr auto capacity() const noexcept {
@@ -223,5 +240,29 @@ struct BasicString {
 };
 
 using String = BasicString<char>;
+
+template <typename Key, typename Value, vcai::size Size>
+struct StaticMap {
+    [[nodiscard]] constexpr auto size() const noexcept { return Size; }
+
+    [[nodiscard]] constexpr auto find(const Key &key) const noexcept
+        -> vcai::size {
+        for (vcai::size ind{}; ind < Size; ++ind)
+            if (keys[ind] == key) return ind;
+
+        return vcai::size(Size);
+    }
+
+    [[nodiscard]] constexpr auto operator[](const Key &key) noexcept -> auto & {
+        return values[find(key)];
+    }
+    [[nodiscard]] constexpr auto operator[](const Key &key) const noexcept
+        -> auto & {
+        return values[find(key)];
+    }
+
+    Key keys[Size];      // NOLINT C-style array
+    Value values[Size];  // NOLINT C-style array
+};
 
 }  // namespace vcai

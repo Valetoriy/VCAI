@@ -1,5 +1,7 @@
 #pragma once
 
+#include <fmt/core.h>
+
 #include "vcai_data_structs.hpp"
 #include "vcai_globals.hpp"
 #include "vcai_util.hpp"
@@ -14,8 +16,21 @@ struct Result {
 
 template <typename Type>
 [[nodiscard]] constexpr auto exec_fn(const char *prog) noexcept {
-    Result<Type> res;
+    auto len{vcai::strlen(prog)};
+    vcai::String line;
 
+    for (vcai::size ind{}; ind < len; ++ind) {
+        char chr{prog[ind]};
+        if (chr != '\n') {
+            line.push_back(chr);
+        } else {
+            fmt::print("{}\n", line);
+            line.clear();
+            continue;
+        }
+    }
+
+    Result<Type> res;
     return res;
 }
 
