@@ -10,7 +10,7 @@ namespace vcai {
 
 template <typename Type>
 struct Result {
-    char error_msg[128];  // NOLINT magic numbers
+    const char *error_msg;
     Type value;
 };
 

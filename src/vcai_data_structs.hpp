@@ -4,6 +4,23 @@
 
 namespace vcai {
 
+namespace _intern {
+
+constexpr auto ERRSIZE{128};
+static constinit char Error[ERRSIZE];  // NOLINT C-style array
+
+constexpr auto AppendToError(const char *err) noexcept -> void {
+    auto len{vcai::strlen(err)};
+    vcai::size ind{};
+    while (err[ind]) ++ind;  // NOLINT pointer arithmetic
+    ++ind;  // Новая запись начнётся с конца предыдущей + 1
+
+    for (; ind < len; ++ind)
+        Error[ind] = err[ind];  // NOLINT pointer arithmetic
+}
+
+}  // namespace _intern
+
 template <typename Contained, vcai::size Size>
 struct StaticArray {
     [[nodiscard]] constexpr auto size() const noexcept { return Size; }
@@ -250,7 +267,8 @@ struct StaticMap {
         for (vcai::size ind{}; ind < Size; ++ind)
             if (keys[ind] == key) return ind;
 
-        return vcai::size(Size);
+        _intern::AppendToError("Неизвестное ключевое слово!");
+        return 1;
     }
 
     [[nodiscard]] constexpr auto operator[](const Key &key) noexcept -> auto & {

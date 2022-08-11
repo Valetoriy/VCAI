@@ -18,10 +18,11 @@ Valetoriy Constexpr ASM Interpreter
     2) Символ (byte)
 
 Операции:
-    add, sum, mul, div, idiv
+    add, sub, mul, div, idiv
+    fadd, fsub, fmul, fdiv
     shl, shr, xor, and, or
     test, cmp
-    mov, lea, jmp, jl, je, jg, jle, jge
+    mov, jmp, jl, je, jg, jle, jge
     call, ret
     push, pop
 
