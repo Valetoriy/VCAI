@@ -351,7 +351,7 @@ struct System {
         dst = src1 / src2;  // NOLINT C-style cast
     }
 
-    static constexpr auto idiv(i64 &dst, i64 &src1, i64 &src2) noexcept
+    static constexpr auto mod(i64 &dst, i64 &src1, i64 &src2) noexcept
         -> void {
         dst = src1 % src2;  // NOLINT C-style cast
     }
