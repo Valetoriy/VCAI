@@ -12,14 +12,10 @@ Valetoriy Constexpr ASM Interpreter
     bp - указатель на начало функции
 
 Типы данных:
-    1) Число
-        1.1) 64-битное целое (i64)
-        1.2) 64-битное с плавающей точкой (f64)
-    2) Символ (byte)
+    1) 64-битное целое число (i64)
 
 Операции:
-    add, sub, mul, div, idiv
-    fadd, fsub, fmul, fdiv
+    add, sub, mul, div, mod
     shl, shr, xor, and, or
     test, cmp
     mov, jmp, jl, je, jg, jle, jge

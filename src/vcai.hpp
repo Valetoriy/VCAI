@@ -8,14 +8,6 @@ static_assert(sizeof(long) == 8,  // NOLINT magic numbers
               "Для i64 нужен 8-байтный целочисленный тип данных!");
 using i64 = long;
 
-static_assert(sizeof(double) == 8,  // NOLINT magic numbers
-              "Для f64 нужен 8-байтный тип данных c плавающей точкой!");
-using f64 = double;
-
-static_assert(sizeof(char) == 1,  // NOLINT magic numbers
-              "Для byte нужен 1-байтный целочисленный положильный тип данных!");
-using byte = char;
-
 // Не очень-то и нужен...
 // Просто аналог std::size_t
 static_assert(
@@ -28,6 +20,11 @@ using size = unsigned long;
     while (str[len] != 0) ++len;  // NOLINT pointer arithmetic
 
     return len;
+}
+
+template <typename T>
+[[nodiscard]] constexpr inline auto move(const T &arg) noexcept {
+    return (T &&) arg;
 }
 
 // Структуры данных
@@ -71,13 +68,24 @@ struct DynamicArray {
         ++m_size;
     }
 
+    constexpr auto push_back(Contained &&elem) noexcept -> void {
+        if (m_size == m_capacity) {
+            if (m_capacity > 0)
+                reserve(m_capacity * 2);
+            else
+                reserve(1);
+        }
+        data[m_size] = vcai::move(elem);  // NOLINT pointer arithmetic
+        ++m_size;
+    }
+
     constexpr auto reserve(const vcai::size &amount) noexcept -> void {
         if (amount > m_capacity) {
             auto new_data{new Contained[amount]};
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
-                    new_data[i] = data[i];  // NOLINT pointer arithmetic
+                    new_data[i] = vcai::move(data[i]);  // NOLINT pointer arithmetic
 
                 delete[](data);
             }
@@ -87,6 +95,8 @@ struct DynamicArray {
     }
 
     constexpr auto clear() noexcept -> void { m_size = 0; }
+
+    constexpr auto is_empty() noexcept -> bool { return m_size == 0; }
 
     [[nodiscard]] constexpr auto size() const noexcept { return m_size; }
     [[nodiscard]] constexpr auto capacity() const noexcept {
@@ -122,10 +132,50 @@ struct DynamicArray {
     }
 
     // Правило 5
-    constexpr DynamicArray(const DynamicArray &other) noexcept = delete;
-    constexpr DynamicArray(DynamicArray &&other) noexcept = delete;
-    constexpr auto operator=(const DynamicArray &other) noexcept = delete;
-    constexpr auto operator=(DynamicArray &&other) noexcept = delete;
+    constexpr DynamicArray(const DynamicArray &other) noexcept {
+        auto len{other.size()};
+        reserve(len);
+        m_size = len;
+
+        for (vcai::size i{}; i < m_size; ++i)
+            data[i] = other[i];  // NOLINT pointer arithmetic
+    }
+    constexpr DynamicArray(DynamicArray &&other) noexcept
+        : data(other.data), m_size(other.size()), m_capacity(other.capacity()) {
+        other.data = nullptr;
+        other.m_size = 0;
+        other.m_capacity = 0;
+    }
+    constexpr auto operator=(const DynamicArray &other) noexcept -> auto & {
+        if (&other != this) {
+            if (m_capacity > 0) {
+                delete[](data);
+                m_capacity = 0;
+            }
+
+            auto len{other.size()};
+            reserve(len);
+            m_size = len;
+
+            for (vcai::size i{}; i < m_size; ++i)
+                data[i] = other[i];  // NOLINT pointer arithmetic
+        }
+        return *this;
+    }
+    constexpr auto operator=(DynamicArray &&other) noexcept -> auto & {
+        if (&other != this) {
+            if (m_capacity > 0) delete[](data);
+
+            data = other.data;
+            m_size = other.m_size;
+            m_capacity = other.m_capacity;
+
+            other.data = nullptr;
+            other.m_size = 0;
+            other.m_capacity = 0;
+        }
+        return *this;
+    }
 
     constexpr ~DynamicArray() noexcept {
         if (m_capacity > 0) delete[](data);
@@ -137,7 +187,7 @@ struct DynamicArray {
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
     [[nodiscard]] constexpr auto end() const noexcept { return data + m_size; };
 
-    Contained *data;
+    Contained *data{};
 
    private:
     vcai::size m_size{};
@@ -166,7 +216,7 @@ struct BasicString {
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
-                    new_data[i] = data[i];  // NOLINT pointer arithmetic
+                    new_data[i] = vcai::move(data[i]);  // NOLINT ...
 
                 delete[](data);
             }
@@ -296,23 +346,22 @@ struct StaticMap {
 };
 
 // Для ASM
-struct System {
-   private:
-    i64 IntReg[8]{};       // NOLINT ...
-    i64 ArgReg[8]{};       // NOLINT ...
-    i64 SP{}, BP{}, PC{};  // NOLINT ...
-    byte ZF{}, SF{};       // NOLINT ...
+struct Interpreter {
+    i64 IntReg[8]{};  // NOLINT ...
+    i64 ArgReg[8]{};  // NOLINT ...
+    i64 SP{}, BP{}, PC{};
+    bool ZF{}, SF{};
 
-    byte Stack[1024]{};  // NOLINT ...
+    i64 Stack[256]{};  // NOLINT ...
 
     // clang-format off
-    StaticMap<const char*, i64*, 8> MapToGPR{ // NOLINT ...
+    StaticMap<const char*, i64*, 8> StrToIR{ // NOLINT ...
         {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7"},
         {&IntReg[0], &IntReg[1], &IntReg[2], &IntReg[3],
          &IntReg[4], &IntReg[5], &IntReg[6], &IntReg[7]}, // NOLINT ...
     };
 
-    StaticMap<const char*, i64*, 8> MapToAR{ // NOLINT ...
+    StaticMap<const char*, i64*, 8> StrToAR{ // NOLINT ...
         {"a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"},
         {&ArgReg[0], &ArgReg[1], &ArgReg[2], &ArgReg[3],
          &ArgReg[4], &ArgReg[5], &ArgReg[6], &ArgReg[7]}, // NOLINT ...
@@ -320,75 +369,34 @@ struct System {
     // clang-format on
 
     static constexpr auto add(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
-        dst = src1 + src2;  // NOLINT C-style cast
-    }
-    static constexpr auto fadd(f64 &dst, f64 &src1, f64 &src2) noexcept
-        -> void {
-        dst = src1 + src2;  // NOLINT C-style cast
+        dst = src1 + src2;
     }
 
     static constexpr auto sub(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
-        dst = src1 - src2;  // NOLINT C-style cast
-    }
-    static constexpr auto fsub(f64 &dst, f64 &src1, f64 &src2) noexcept
-        -> void {
-        dst = src1 - src2;  // NOLINT C-style cast
+        dst = src1 - src2;
     }
 
     static constexpr auto mul(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
-        dst = src1 * src2;  // NOLINT C-style cast
-    }
-    static constexpr auto fmul(f64 &dst, f64 &src1, f64 &src2) noexcept
-        -> void {
-        dst = src1 * src2;  // NOLINT C-style cast
+        dst = src1 * src2;
     }
 
     static constexpr auto div(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
-        dst = src1 / src2;  // NOLINT C-style cast
-    }
-    static constexpr auto fdiv(f64 &dst, f64 &src1, f64 &src2) noexcept
-        -> void {
-        dst = src1 / src2;  // NOLINT C-style cast
+        dst = src1 / src2;
     }
 
-    static constexpr auto idiv(i64 &dst, i64 &src1, i64 &src2) noexcept
-        -> void {
-        dst = src1 % src2;  // NOLINT C-style cast
-    }
-
-    static constexpr auto shr(i64 &dst, i64 &src) noexcept -> void {
-        dst >>= src;  // NOLINT C-style cast
-    }
-
-    static constexpr auto shl(i64 &dst, i64 &src) noexcept -> void {
-        dst <<= src;  // NOLINT C-style cast
-    }
-
-    static constexpr auto v_xor(i64 &dst, i64 &src) noexcept -> void {
-        dst ^= src;  // NOLINT C-style cast
-    }
-
-    static constexpr auto v_and(i64 &dst, i64 &src) noexcept -> void {
-        dst &= src;  // NOLINT C-style cast
-    }
-
-    static constexpr auto v_or(i64 &dst, i64 &src) noexcept -> void {
-        dst |= src;  // NOLINT C-style cast
-    }
-
-    constexpr auto test(i64 &src) noexcept -> void {
-        if (src == 0) ZF = 1;  // NOLINT C-style cast
+    static constexpr auto mod(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+        dst = src1 % src2;
     }
 
     constexpr auto cmp(i64 &dst, i64 &src) noexcept -> void {
         if (dst < src) {
-            SF = 1;  // NOLINT C-style cast
-            ZF = 0;
+            SF = true;
+            ZF = false;
         } else if (dst > src) {
-            SF = 0;  // NOLINT C-style cast
-            ZF = 0;
+            SF = false;
+            ZF = false;
         } else if (dst == src)
-            ZF = 1;  // NOLINT C-style cast
+            ZF = true;
     }
 
     static constexpr auto mov(i64 &dst, i64 &src) noexcept -> void {
@@ -398,23 +406,27 @@ struct System {
     constexpr auto jmp(i64 &dst) noexcept -> void { PC = dst; }
 
     constexpr auto jl(i64 &dst) noexcept -> void {
-        if (SF == 1) PC = dst;
+        if (SF) PC = dst;
     }
 
     constexpr auto je(i64 &dst) noexcept -> void {
-        if (ZF == 0) PC = dst;
+        if (ZF) PC = dst;
+    }
+
+    constexpr auto jne(i64 &dst) noexcept -> void {
+        if (!ZF) PC = dst;
     }
 
     constexpr auto jg(i64 &dst) noexcept -> void {
-        if (SF == 0) PC = dst;
-    }
-
-    constexpr auto jge(i64 &dst) noexcept -> void {
-        if (ZF == 0 or SF == 0) PC = dst;
+        if (!SF) PC = dst;
     }
 
     constexpr auto jle(i64 &dst) noexcept -> void {
-        if (ZF == 0 or SF == 1) PC = dst;
+        if (ZF or SF) PC = dst;
+    }
+
+    constexpr auto jge(i64 &dst) noexcept -> void {
+        if (ZF or !SF) PC = dst;
     }
 
     // constexpr auto call(i64 &dst) noexcept -> void {}
@@ -425,30 +437,53 @@ struct System {
     //
     // constexpr auto pop(i64 &dst) noexcept -> void {}
 
-    [[nodiscard]] constexpr auto ParseLine();
-    [[nodiscard]] constexpr auto PerformAction();
-
-    friend constexpr auto exec_fn(const char *prog) noexcept;
-};
-
-template <typename ReturnType>
-[[nodiscard]] constexpr auto exec_fn(const char *prog) noexcept {
-    auto len{vcai::strlen(prog)};
-    String line;
-    [[maybe_unused]] System sys{};
-
-    for (vcai::size ind{}; ind < len; ++ind) {
-        char chr{prog[ind]};  // NOLINT pointer arithmetic
-        if (chr != '\n') {
-            line.push_back(chr);
-        } else {
-            // fmt::print("{}\n", line);
-            line.clear();
-            continue;
-        }
+    static constexpr auto shl(i64 &dst, i64 &src) noexcept -> void {
+        dst <<= src;  // NOLINT binary op on int
     }
 
-    return 12;
+    static constexpr auto shr(i64 &dst, i64 &src) noexcept -> void {
+        dst >>= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_xor(i64 &dst, i64 &src) noexcept -> void {
+        dst ^= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_and(i64 &dst, i64 &src) noexcept -> void {
+        dst &= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_or(i64 &dst, i64 &src) noexcept -> void {
+        dst |= src;  // NOLINT binary op on int
+    }
+
+    DynamicArray<DynamicArray<String>> prog;
+
+    constexpr auto Parse(const char *txt) -> void {
+        auto len{vcai::strlen(txt)};
+
+        vcai::size line_ind{};
+        String word;
+        for (vcai::size ind{}; ind < len; ++ind) {
+            char chr{txt[ind]};  // NOLINT pointer arithmetic
+            if (chr != '\n') {
+                word.push_back(chr);
+            } else {
+                word.clear();
+                // if (!prog[line_ind].is_empty()) ++line_ind;
+                continue;
+            }
+        }
+    }
+    constexpr auto PerformAction() -> void {}
+
+    friend constexpr auto exec_fn(const char *txt) noexcept;
+};
+
+[[nodiscard]] constexpr auto exec_fn(const char *txt) noexcept {
+    [[maybe_unused]] Interpreter interp{};
+    interp.Parse(txt);
+    return -12;  // NOLINT magic numbers
 }
 
 }  // namespace vcai
