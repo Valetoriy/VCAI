@@ -24,4 +24,3 @@ Valetoriy Constexpr ASM Interpreter
 
 Дополнительно:
     1) Ярлыки
-    2) Переменные/константы

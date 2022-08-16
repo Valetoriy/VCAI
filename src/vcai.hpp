@@ -17,7 +17,7 @@ using size = unsigned long;
 
 [[nodiscard]] constexpr auto strlen(const char *str) noexcept -> size {
     size len{};
-    while (str[len] != 0) ++len;  // NOLINT pointer arithmetic
+    while (str[len] != 0) ++len;
 
     return len;
 }
@@ -47,7 +47,8 @@ struct StaticArray {
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
     [[nodiscard]] constexpr auto end() const noexcept { return data + Size; };
 
-    Contained data[Size];  // NOLINT C-style arrays
+    // TODO(shadolproff): протестировать std::array в CE
+    Contained data[Size];
 };
 
 // Взято с
@@ -64,7 +65,7 @@ struct DynamicArray {
             else
                 reserve(1);
         }
-        data[m_size] = elem;  // NOLINT pointer arithmetic
+        data[m_size] = elem;
         ++m_size;
     }
 
@@ -75,18 +76,23 @@ struct DynamicArray {
             else
                 reserve(1);
         }
-        data[m_size] = vcai::move(elem);  // NOLINT pointer arithmetic
+        data[m_size] = vcai::move(elem);
         ++m_size;
     }
 
+    constexpr auto pop_back() noexcept -> void {
+        if (m_size > 0) --m_size;
+    }
+
+    constexpr auto back() noexcept -> auto & { return data[m_size - 1]; }
+
     constexpr auto reserve(const vcai::size &amount) noexcept -> void {
         if (amount > m_capacity) {
-            auto new_data{new Contained[amount]};
+            auto new_data{new Contained[amount]};  // NOLINT no fail check
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
-                    new_data[i] =
-                        vcai::move(data[i]);  // NOLINT pointer arithmetic
+                    new_data[i] = vcai::move(data[i]);
 
                 delete[](data);
             }
@@ -106,11 +112,11 @@ struct DynamicArray {
 
     [[nodiscard]] constexpr auto operator[](const vcai::size &ind) noexcept
         -> auto & {
-        return data[ind];  // NOLINT pointer arithmetic
+        return data[ind];
     }
     [[nodiscard]] constexpr auto operator[](
         const vcai::size &ind) const noexcept -> auto & {
-        return data[ind];  // NOLINT pointer arithmetic
+        return data[ind];
     }
 
     [[nodiscard]] constexpr DynamicArray() noexcept = default;
@@ -122,11 +128,11 @@ struct DynamicArray {
         reserve(amount);
         m_size = amount;
 
-        data[0] = elem;  // NOLINT pointer arithmetic
+        data[0] = elem;
         if constexpr (amount > 1) {
             vcai::size ind{1};
             for (const auto &e : {elems...}) {  // NOLINT short name
-                data[ind] = e;                  // NOLINT pointer arithmetic
+                data[ind] = e;
                 ++ind;
             }
         }
@@ -138,8 +144,7 @@ struct DynamicArray {
         reserve(len);
         m_size = len;
 
-        for (vcai::size i{}; i < m_size; ++i)
-            data[i] = other[i];  // NOLINT pointer arithmetic
+        for (vcai::size i{}; i < m_size; ++i) data[i] = other[i];
     }
     constexpr DynamicArray(DynamicArray &&other) noexcept
         : data(other.data), m_size(other.size()), m_capacity(other.capacity()) {
@@ -158,8 +163,7 @@ struct DynamicArray {
             reserve(len);
             m_size = len;
 
-            for (vcai::size i{}; i < m_size; ++i)
-                data[i] = other[i];  // NOLINT pointer arithmetic
+            for (vcai::size i{}; i < m_size; ++i) data[i] = other[i];
         }
         return *this;
     }
@@ -183,14 +187,10 @@ struct DynamicArray {
     }
 
     [[nodiscard]] constexpr auto begin() noexcept { return data; };
-    [[nodiscard]] constexpr auto end() noexcept {
-        return data + m_size;  // NOLINT pointer arithmetic
-    };
+    [[nodiscard]] constexpr auto end() noexcept { return data + m_size; };
 
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
-    [[nodiscard]] constexpr auto end() const noexcept {
-        return data + m_size;  // NOLINT pointer arithmetic
-    };
+    [[nodiscard]] constexpr auto end() const noexcept { return data + m_size; };
 
     Contained *data{};
 
@@ -211,17 +211,43 @@ struct BasicString {
             else
                 reserve(1);
         }
-        data[m_size] = elem;  // NOLINT pointer arithmetic
+        data[m_size] = elem;
         ++m_size;
+    }
+
+    constexpr auto pop_back() noexcept -> void {
+        if (m_size > 0) --m_size;
+    }
+
+    [[nodiscard]] constexpr auto to_i64() const noexcept -> i64 {
+        if (m_size == 0) return -1;
+
+        i64 ret{}, icount{};
+        for (i64 ind{static_cast<i64>(m_size - 1)}; ind >= 0; --ind) {
+            auto chr{data[ind]};
+            if (chr >= '0' and chr <= '9') {
+                // 48 - ноль в ASCII
+                chr -= 48;  // NOLINT magic numbers
+
+                // Аналог std::pow()
+                i64 pow{1};
+                for (i64 exp{}; exp < icount; ++exp) pow *= 10;  // NOLINT ...
+                ret += chr * pow;
+                ++icount;
+            }
+        }
+        if (data[0] == '-') ret *= -1;
+
+        return ret;
     }
 
     constexpr auto reserve(const vcai::size &amount) noexcept -> void {
         if (amount > m_capacity) {
-            auto new_data{new CharType[amount]};  // NOLINT exc handling
+            auto new_data{new CharType[amount]};  // NOLINT no fail check
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
-                    new_data[i] = vcai::move(data[i]);  // NOLINT ...
+                    new_data[i] = vcai::move(data[i]);
 
                 delete[](data);
             }
@@ -241,11 +267,11 @@ struct BasicString {
 
     [[nodiscard]] constexpr auto operator[](const vcai::size &ind) noexcept
         -> auto & {
-        return data[ind];  // NOLINT pointer arithmetic
+        return data[ind];
     }
     [[nodiscard]] constexpr auto operator[](
         const vcai::size &ind) const noexcept -> auto & {
-        return data[ind];  // NOLINT pointer arithmetic
+        return data[ind];
     }
 
     [[nodiscard]] constexpr BasicString() noexcept = default;
@@ -255,8 +281,7 @@ struct BasicString {
         reserve(len);
         m_size = len;
 
-        for (vcai::size i{}; i < m_size; ++i)
-            data[i] = str[i];  // NOLINT pointer arithmetic
+        for (vcai::size i{}; i < m_size; ++i) data[i] = str[i];
     }
 
     // Правило 5
@@ -265,8 +290,7 @@ struct BasicString {
         reserve(len);
         m_size = len;
 
-        for (vcai::size i{}; i < m_size; ++i)
-            data[i] = other[i];  // NOLINT pointer arithmetic
+        for (vcai::size i{}; i < m_size; ++i) data[i] = other[i];
     }
     constexpr BasicString(BasicString &&other) noexcept
         : data(other.data), m_size(other.size()), m_capacity(other.capacity()) {
@@ -285,8 +309,7 @@ struct BasicString {
             reserve(len);
             m_size = len;
 
-            for (vcai::size i{}; i < m_size; ++i)
-                data[i] = other[i];  // NOLINT pointer arithmetic
+            for (vcai::size i{}; i < m_size; ++i) data[i] = other[i];
         }
         return *this;
     }
@@ -310,9 +333,7 @@ struct BasicString {
     }
 
     [[nodiscard]] constexpr auto begin() noexcept { return data; };
-    [[nodiscard]] constexpr auto end() noexcept {
-        return data + m_size;  // NOLINT pointer arithmetic
-    };
+    [[nodiscard]] constexpr auto end() noexcept { return data + m_size; };
 
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
     [[nodiscard]] constexpr auto end() const noexcept { return data + m_size; };
@@ -330,14 +351,13 @@ template <typename Key, typename Value, vcai::size Size>
 struct StaticMap {
     [[nodiscard]] constexpr auto size() const noexcept { return Size; }
 
-    [[nodiscard]] constexpr auto find(const Key &key) const noexcept
-        -> vcai::size {
-        for (vcai::size ind{}; ind < Size; ++ind)
+    [[nodiscard]] constexpr auto find(const Key &key) const noexcept -> i64 {
+        for (i64 ind{}; ind < Size; ++ind)
             if (keys[ind] == key) return ind;
 
         // TODO(shadolproff): добавить универсальный механизм обработки
         // ошибок
-        return Size;
+        return -1;
     }
 
     [[nodiscard]] constexpr auto operator[](const Key &key) noexcept -> auto & {
@@ -348,18 +368,19 @@ struct StaticMap {
         return values[find(key)];
     }
 
-    Key keys[Size];      // NOLINT C-style array
-    Value values[Size];  // NOLINT C-style array
+    Key keys[Size];
+    Value values[Size];
 };
 
 // Для ASM
 struct Interpreter {
-    i64 IntReg[8]{};  // NOLINT ...
-    i64 ArgReg[8]{};  // NOLINT ...
+    i64 IntReg[8]{};  // NOLINT magic numbers
+    i64 ArgReg[8]{};  // NOLINT magic numbers
     i64 SP{}, BP{}, PC{};
     bool ZF{}, SF{};
 
-    i64 Stack[256]{};  // NOLINT ...
+    i64 Stack[256]{};  // NOLINT magic numbers
+    DynamicArray<i64> CallStack;
 
     // clang-format off
     StaticMap<const char*, i64*, 8> StrToIR{ // NOLINT ...
@@ -407,7 +428,7 @@ struct Interpreter {
     }
 
     static constexpr auto mov(i64 &dst, i64 &src) noexcept -> void {
-        dst = src;  // NOLINT C-style cast
+        dst = src;
     }
 
     constexpr auto jmp(i64 &dst) noexcept -> void { PC = dst; }
@@ -436,13 +457,25 @@ struct Interpreter {
         if (ZF or !SF) PC = dst;
     }
 
-    // constexpr auto call(i64 &dst) noexcept -> void {}
-    //
-    // constexpr auto ret() noexcept -> void {}
-    //
-    // constexpr auto push(i64 &dst) noexcept -> void {}
-    //
-    // constexpr auto pop(i64 &dst) noexcept -> void {}
+    constexpr auto call(i64 &dst) noexcept -> void {
+        CallStack.push_back(PC + 1);
+        PC = dst;
+    }
+
+    constexpr auto ret() noexcept -> void {
+        PC = CallStack.back();
+        CallStack.pop_back();
+    }
+
+    constexpr auto push(i64 &dst) noexcept -> void {
+        Stack[SP] = dst;
+        ++SP;
+    }
+
+    constexpr auto pop(i64 &dst) noexcept -> void {
+        --SP;
+        dst = Stack[SP];
+    }
 
     static constexpr auto shl(i64 &dst, i64 &src) noexcept -> void {
         dst <<= src;  // NOLINT binary op on int
@@ -472,7 +505,7 @@ struct Interpreter {
         DynamicArray<String> line;
         String word;
         for (vcai::size ind{}; ind < len; ++ind) {
-            char chr{txt[ind]};  // NOLINT pointer arithmetic
+            char chr{txt[ind]};
             if (chr != ' ' and chr != '\n') {
                 word.push_back(chr);
             } else {
@@ -485,10 +518,6 @@ struct Interpreter {
 
     constexpr auto ToBytecode() -> void {
         for (const auto &line : prog) {
-            for (const auto &word : line) {
-                fmt::print("{} ", word);
-            }
-            fmt::print("\n");
         }
     }
 
@@ -499,6 +528,7 @@ struct Interpreter {
     [[maybe_unused]] Interpreter interp{};
     interp.ToWordArray(txt);
     interp.ToBytecode();
+    // interp.Exec();
 
     return interp.IntReg[0];
 }
