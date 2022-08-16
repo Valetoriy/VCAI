@@ -15,7 +15,7 @@ static_assert(
     "Для size нужен 8-байтный целочисленный положительный тип данных!");
 using size = unsigned long;
 
-[[nodiscard]] constexpr inline auto strlen(const char *str) noexcept -> size {
+[[nodiscard]] constexpr auto strlen(const char *str) noexcept -> size {
     size len{};
     while (str[len] != 0) ++len;  // NOLINT pointer arithmetic
 
@@ -23,7 +23,7 @@ using size = unsigned long;
 }
 
 template <typename T>
-[[nodiscard]] constexpr inline auto move(const T &arg) noexcept {
+[[nodiscard]] constexpr auto move(const T &arg) noexcept {
     return (T &&) arg;
 }
 
@@ -85,7 +85,8 @@ struct DynamicArray {
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
-                    new_data[i] = vcai::move(data[i]);  // NOLINT pointer arithmetic
+                    new_data[i] =
+                        vcai::move(data[i]);  // NOLINT pointer arithmetic
 
                 delete[](data);
             }
@@ -182,10 +183,14 @@ struct DynamicArray {
     }
 
     [[nodiscard]] constexpr auto begin() noexcept { return data; };
-    [[nodiscard]] constexpr auto end() noexcept { return data + m_size; };
+    [[nodiscard]] constexpr auto end() noexcept {
+        return data + m_size;  // NOLINT pointer arithmetic
+    };
 
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
-    [[nodiscard]] constexpr auto end() const noexcept { return data + m_size; };
+    [[nodiscard]] constexpr auto end() const noexcept {
+        return data + m_size;  // NOLINT pointer arithmetic
+    };
 
     Contained *data{};
 
@@ -305,7 +310,9 @@ struct BasicString {
     }
 
     [[nodiscard]] constexpr auto begin() noexcept { return data; };
-    [[nodiscard]] constexpr auto end() noexcept { return data + m_size; };
+    [[nodiscard]] constexpr auto end() noexcept {
+        return data + m_size;  // NOLINT pointer arithmetic
+    };
 
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
     [[nodiscard]] constexpr auto end() const noexcept { return data + m_size; };
@@ -459,31 +466,41 @@ struct Interpreter {
 
     DynamicArray<DynamicArray<String>> prog;
 
-    constexpr auto Parse(const char *txt) -> void {
+    constexpr auto ToWordArray(const char *txt) -> void {
         auto len{vcai::strlen(txt)};
 
-        vcai::size line_ind{};
+        DynamicArray<String> line;
         String word;
         for (vcai::size ind{}; ind < len; ++ind) {
             char chr{txt[ind]};  // NOLINT pointer arithmetic
-            if (chr != '\n') {
+            if (chr != ' ' and chr != '\n') {
                 word.push_back(chr);
             } else {
-                word.clear();
-                // if (!prog[line_ind].is_empty()) ++line_ind;
-                continue;
+                if (not word.is_empty()) line.push_back(vcai::move(word));
+                if (chr == '\n')
+                    if (not line.is_empty()) prog.push_back(vcai::move(line));
             }
         }
     }
-    constexpr auto PerformAction() -> void {}
+
+    constexpr auto ToBytecode() -> void {
+        for (const auto &line : prog) {
+            for (const auto &word : line) {
+                fmt::print("{} ", word);
+            }
+            fmt::print("\n");
+        }
+    }
 
     friend constexpr auto exec_fn(const char *txt) noexcept;
 };
 
 [[nodiscard]] constexpr auto exec_fn(const char *txt) noexcept {
     [[maybe_unused]] Interpreter interp{};
-    interp.Parse(txt);
-    return -12;  // NOLINT magic numbers
+    interp.ToWordArray(txt);
+    interp.ToBytecode();
+
+    return interp.IntReg[0];
 }
 
 }  // namespace vcai
