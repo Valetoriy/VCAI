@@ -219,6 +219,10 @@ struct BasicString {
         if (m_size > 0) --m_size;
     }
 
+    constexpr auto front() noexcept -> auto & { return data[0]; }
+
+    constexpr auto back() noexcept -> auto & { return data[m_size - 1]; }
+
     [[nodiscard]] constexpr auto to_i64() const noexcept -> i64 {
         if (m_size == 0) return -1;
 
@@ -451,8 +455,8 @@ struct DynamicMap {
         }
     }
 
-    Key *keys;
-    Value *values;
+    Key *keys{};
+    Value *values{};
 
    private:
     vcai::size m_size{};
@@ -461,28 +465,23 @@ struct DynamicMap {
 
 // Для ASM
 struct Interpreter {
-    i64 IntReg[8]{};  // NOLINT magic numbers
-    i64 ArgReg[8]{};  // NOLINT magic numbers
+    i64 IntReg[4]{};
+    i64 ArgReg[4]{};
     i64 SP{}, BP{}, PC{};
     bool ZF{}, SF{};
 
-    static constexpr vcai::size STACKSIZE{256};
+    static constexpr vcai::size STACKSIZE{128};
     i64 Stack[STACKSIZE]{};
     DynamicArray<i64> CallStack;
+    DynamicMap<String, i64> Labels;
 
-    // clang-format off
-    StaticMap<const char*, i64*, 8> StrToIR{ // NOLINT ...
-        {"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7"},
-        {&IntReg[0], &IntReg[1], &IntReg[2], &IntReg[3],
-         &IntReg[4], &IntReg[5], &IntReg[6], &IntReg[7]}, // NOLINT ...
-    };
+    StaticMap<const char *, i64 *, 4> StrToIR{
+        {"r0", "r1", "r2", "r3"},
+        {&IntReg[0], &IntReg[1], &IntReg[2], &IntReg[3]}};
 
-    StaticMap<const char*, i64*, 8> StrToAR{ // NOLINT ...
-        {"a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"},
-        {&ArgReg[0], &ArgReg[1], &ArgReg[2], &ArgReg[3],
-         &ArgReg[4], &ArgReg[5], &ArgReg[6], &ArgReg[7]}, // NOLINT ...
-    };
-    // clang-format on
+    StaticMap<const char *, i64 *, 4> StrToAR{
+        {"a0", "a1", "a2", "a3"},
+        {&ArgReg[0], &ArgReg[1], &ArgReg[2], &ArgReg[3]}};
 
     static constexpr auto add(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 + src2;
@@ -592,22 +591,29 @@ struct Interpreter {
 
         DynamicArray<String> line;
         String word;
-        for (vcai::size ind{}; ind < len; ++ind) {
+        for (vcai::size ind{}; ind <= len; ++ind) {
             char chr{txt[ind]};
-            if (chr != ' ' and chr != '\n') {
+            if (chr != ' ' and chr != '\n' and chr != '\0') {
                 word.push_back(chr);
             } else {
-                if (not word.is_empty()) line.push_back(vcai::move(word));
-                if (chr == '\n')
-                    if (not line.is_empty()) prog.push_back(vcai::move(line));
+                if (not word.is_empty()) {
+                    if (word.back() == ':')
+                        Labels.push_back(vcai::move(word),
+                                         static_cast<i64>(prog.size()));
+                    else
+                        line.push_back(vcai::move(word));
+                }
+                if (chr == '\n' or chr == '\0') {
+                    if (not line.is_empty() and line[0].front() != '#')
+                        prog.push_back(vcai::move(line));
+                    else
+                        line.clear();
+                }
             }
         }
     }
 
-    constexpr auto ToBytecode() -> void {
-        // for (const auto &line : prog) {
-        // }
-    }
+    constexpr auto Exec() -> void {}
 
     friend constexpr auto exec_fn(const char *txt) noexcept;
 };
@@ -615,8 +621,7 @@ struct Interpreter {
 [[nodiscard]] constexpr auto exec_fn(const char *txt) noexcept {
     [[maybe_unused]] Interpreter interp{};
     interp.ToWordArray(txt);
-    interp.ToBytecode();
-    // interp.Exec();
+    interp.Exec();
 
     return interp.IntReg[0];
 }
