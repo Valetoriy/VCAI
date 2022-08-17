@@ -274,6 +274,16 @@ struct BasicString {
         return data[ind];
     }
 
+    [[nodiscard]] constexpr auto operator==(
+        const BasicString &other) const noexcept -> bool {
+        if (m_size != other.m_size) return false;
+
+        for (vcai::size ind{}; ind < m_size; ++ind)
+            if (data[ind] != other.data[ind]) return false;
+
+        return true;
+    }
+
     [[nodiscard]] constexpr BasicString() noexcept = default;
 
     [[nodiscard]] constexpr explicit BasicString(const char *str) noexcept {
@@ -372,6 +382,83 @@ struct StaticMap {
     Value values[Size];
 };
 
+template <typename Key, typename Value>
+struct DynamicMap {
+    constexpr auto push_back(Key &&key, Value &&val) noexcept -> void {
+        if (m_size == m_capacity) {
+            if (m_capacity > 0)
+                reserve(m_capacity * 2);
+            else
+                reserve(1);
+        }
+        keys[m_size] = vcai::move(key);
+        values[m_size] = vcai::move(val);
+        ++m_size;
+    }
+
+    constexpr auto reserve(const vcai::size &amount) noexcept -> void {
+        if (amount > m_capacity) {
+            auto new_keys{new Key[amount]};      // NOLINT no fail check
+            auto new_values{new Value[amount]};  // NOLINT no fail check
+
+            if (m_capacity > 0) {
+                for (vcai::size i{}; i < m_size; ++i) {
+                    new_keys[i] = vcai::move(keys[i]);
+                    new_values[i] = vcai::move(values[i]);
+                }
+
+                delete[](keys);
+                delete[](values);
+            }
+            keys = new_keys;
+            values = new_values;
+            m_capacity = amount;
+        }
+    }
+
+    [[nodiscard]] constexpr auto size() const noexcept { return m_size; }
+    [[nodiscard]] constexpr auto capacity() const noexcept {
+        return m_capacity;
+    }
+
+    [[nodiscard]] constexpr auto find(const Key &key) const noexcept -> i64 {
+        for (vcai::size ind{}; ind < m_size; ++ind)
+            if (keys[ind] == key) return static_cast<i64>(ind);
+
+        return -1;
+    }
+
+    [[nodiscard]] constexpr auto operator[](const Key &key) noexcept -> auto & {
+        return values[find(key)];
+    }
+    [[nodiscard]] constexpr auto operator[](const Key &key) const noexcept
+        -> auto & {
+        return values[find(key)];
+    }
+
+    [[nodiscard]] constexpr DynamicMap() noexcept = default;
+
+    // Правило 5
+    constexpr DynamicMap(const DynamicMap &other) noexcept = delete;
+    constexpr DynamicMap(DynamicMap &&other) noexcept = delete;
+    constexpr auto operator=(const DynamicMap &other) noexcept = delete;
+    constexpr auto operator=(DynamicMap &&other) noexcept = delete;
+
+    constexpr ~DynamicMap() noexcept {
+        if (m_capacity > 0) {
+            delete[](keys);
+            delete[](values);
+        }
+    }
+
+    Key *keys;
+    Value *values;
+
+   private:
+    vcai::size m_size{};
+    vcai::size m_capacity{};
+};
+
 // Для ASM
 struct Interpreter {
     i64 IntReg[8]{};  // NOLINT magic numbers
@@ -379,7 +466,8 @@ struct Interpreter {
     i64 SP{}, BP{}, PC{};
     bool ZF{}, SF{};
 
-    i64 Stack[256]{};  // NOLINT magic numbers
+    static constexpr vcai::size STACKSIZE{256};
+    i64 Stack[STACKSIZE]{};
     DynamicArray<i64> CallStack;
 
     // clang-format off
@@ -517,8 +605,8 @@ struct Interpreter {
     }
 
     constexpr auto ToBytecode() -> void {
-        for (const auto &line : prog) {
-        }
+        // for (const auto &line : prog) {
+        // }
     }
 
     friend constexpr auto exec_fn(const char *txt) noexcept;
