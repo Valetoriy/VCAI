@@ -219,9 +219,17 @@ struct BasicString {
         if (m_size > 0) --m_size;
     }
 
-    constexpr auto front() noexcept -> auto & { return data[0]; }
+    [[nodiscard]] constexpr auto front() noexcept -> auto & { return data[0]; }
+    [[nodiscard]] constexpr auto front() const noexcept -> auto & {
+        return data[0];
+    }
 
-    constexpr auto back() noexcept -> auto & { return data[m_size - 1]; }
+    [[nodiscard]] constexpr auto back() noexcept -> auto & {
+        return data[m_size - 1];
+    }
+    [[nodiscard]] constexpr auto back() const noexcept -> auto & {
+        return data[m_size - 1];
+    }
 
     [[nodiscard]] constexpr auto to_i64() const noexcept -> i64 {
         if (m_size == 0) return -1;
@@ -247,7 +255,7 @@ struct BasicString {
 
     constexpr auto reserve(const vcai::size &amount) noexcept -> void {
         if (amount > m_capacity) {
-            auto new_data{new CharType[amount]};  // NOLINT no fail check
+            auto new_data{new CharType[amount]{}};  // NOLINT no fail check
 
             if (m_capacity > 0) {
                 for (vcai::size i{}; i < m_size; ++i)
@@ -284,6 +292,16 @@ struct BasicString {
 
         for (vcai::size ind{}; ind < m_size; ++ind)
             if (data[ind] != other.data[ind]) return false;
+
+        return true;
+    }
+
+    [[nodiscard]] constexpr auto operator==(const char *other) const noexcept
+        -> bool {
+        if (m_size != vcai::strlen(other)) return false;
+
+        for (vcai::size ind{}; ind < m_size; ++ind)
+            if (data[ind] != other[ind]) return false;
 
         return true;
     }
@@ -366,7 +384,7 @@ struct StaticMap {
     [[nodiscard]] constexpr auto size() const noexcept { return Size; }
 
     [[nodiscard]] constexpr auto find(const Key &key) const noexcept -> i64 {
-        for (i64 ind{}; ind < Size; ++ind)
+        for (i64 ind{}; ind < static_cast<i64>(Size); ++ind)
             if (keys[ind] == key) return ind;
 
         // TODO(shadolproff): добавить универсальный механизм обработки
@@ -385,6 +403,10 @@ struct StaticMap {
     Key keys[Size];
     Value values[Size];
 };
+
+template <typename Key1, typename... Keys, typename Val1, typename... Values>
+StaticMap(Key1 key1, Keys... keys, Val1 val1, Values... values)
+    -> StaticMap<Key1, Val1, sizeof...(Keys) + 1>;
 
 template <typename Key, typename Value>
 struct DynamicMap {
@@ -475,35 +497,62 @@ struct Interpreter {
     DynamicArray<i64> CallStack;
     DynamicMap<String, i64> Labels;
 
-    StaticMap<const char *, i64 *, 4> StrToIR{
-        {"r0", "r1", "r2", "r3"},
+    StaticMap<String, i64 *, 4> StrToIR{
+        {String{"r0"}, String{"r1"}, String{"r2"}, String{"r3"}},
         {&IntReg[0], &IntReg[1], &IntReg[2], &IntReg[3]}};
 
-    StaticMap<const char *, i64 *, 4> StrToAR{
-        {"a0", "a1", "a2", "a3"},
+    StaticMap<String, i64 *, 4> StrToAR{
+        {String{"a0"}, String{"a1"}, String{"a2"}, String{"a3"}},
         {&ArgReg[0], &ArgReg[1], &ArgReg[2], &ArgReg[3]}};
 
-    static constexpr auto add(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+    // Операции с 3 аргументами
+    static constexpr auto add(i64 &dst, const i64 &src1,
+                              const i64 &src2) noexcept -> void {
         dst = src1 + src2;
     }
 
-    static constexpr auto sub(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+    static constexpr auto sub(i64 &dst, const i64 &src1,
+                              const i64 &src2) noexcept -> void {
         dst = src1 - src2;
     }
 
-    static constexpr auto mul(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+    static constexpr auto mul(i64 &dst, const i64 &src1,
+                              const i64 &src2) noexcept -> void {
         dst = src1 * src2;
     }
 
-    static constexpr auto div(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+    static constexpr auto div(i64 &dst, const i64 &src1,
+                              const i64 &src2) noexcept -> void {
         dst = src1 / src2;
     }
 
-    static constexpr auto mod(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
+    static constexpr auto mod(i64 &dst, const i64 &src1,
+                              const i64 &src2) noexcept -> void {
         dst = src1 % src2;
     }
 
-    constexpr auto cmp(i64 &dst, i64 &src) noexcept -> void {
+    // Операции с 2 аргументами
+    static constexpr auto add(i64 &dst, const i64 &src1) noexcept -> void {
+        dst += src1;
+    }
+
+    static constexpr auto sub(i64 &dst, const i64 &src1) noexcept -> void {
+        dst -= src1;
+    }
+
+    static constexpr auto mul(i64 &dst, const i64 &src1) noexcept -> void {
+        dst *= src1;
+    }
+
+    static constexpr auto div(i64 &dst, const i64 &src1) noexcept -> void {
+        dst /= src1;
+    }
+
+    static constexpr auto mod(i64 &dst, const i64 &src1) noexcept -> void {
+        dst %= src1;
+    }
+
+    constexpr auto cmp(i64 &dst, const i64 &src) noexcept -> void {
         if (dst < src) {
             SF = true;
             ZF = false;
@@ -514,9 +563,34 @@ struct Interpreter {
             ZF = true;
     }
 
-    static constexpr auto mov(i64 &dst, i64 &src) noexcept -> void {
+    static constexpr auto mov(i64 &dst, const i64 &src) noexcept -> void {
         dst = src;
     }
+
+    static constexpr auto shl(i64 &dst, const i64 &src) noexcept -> void {
+        dst <<= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto shr(i64 &dst, const i64 &src) noexcept -> void {
+        dst >>= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_xor(i64 &dst, const i64 &src) noexcept -> void {
+        dst ^= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_and(i64 &dst, const i64 &src) noexcept -> void {
+        dst &= src;  // NOLINT binary op on int
+    }
+
+    static constexpr auto v_or(i64 &dst, const i64 &src) noexcept -> void {
+        dst |= src;  // NOLINT binary op on int
+    }
+
+    // Операции с 1 аргументом
+    static constexpr auto inc(i64 &dst) noexcept -> void { ++dst; }
+
+    static constexpr auto dec(i64 &dst) noexcept -> void { --dst; }
 
     constexpr auto jmp(i64 &dst) noexcept -> void { PC = dst; }
 
@@ -549,11 +623,6 @@ struct Interpreter {
         PC = dst;
     }
 
-    constexpr auto ret() noexcept -> void {
-        PC = CallStack.back();
-        CallStack.pop_back();
-    }
-
     constexpr auto push(i64 &dst) noexcept -> void {
         Stack[SP] = dst;
         ++SP;
@@ -564,24 +633,10 @@ struct Interpreter {
         dst = Stack[SP];
     }
 
-    static constexpr auto shl(i64 &dst, i64 &src) noexcept -> void {
-        dst <<= src;  // NOLINT binary op on int
-    }
-
-    static constexpr auto shr(i64 &dst, i64 &src) noexcept -> void {
-        dst >>= src;  // NOLINT binary op on int
-    }
-
-    static constexpr auto v_xor(i64 &dst, i64 &src) noexcept -> void {
-        dst ^= src;  // NOLINT binary op on int
-    }
-
-    static constexpr auto v_and(i64 &dst, i64 &src) noexcept -> void {
-        dst &= src;  // NOLINT binary op on int
-    }
-
-    static constexpr auto v_or(i64 &dst, i64 &src) noexcept -> void {
-        dst |= src;  // NOLINT binary op on int
+    // Операции без аргументов
+    constexpr auto ret() noexcept -> void {
+        PC = CallStack.back();
+        CallStack.pop_back();
     }
 
     DynamicArray<DynamicArray<String>> prog;
@@ -591,19 +646,22 @@ struct Interpreter {
 
         DynamicArray<String> line;
         String word;
+        // Проходимся по всем символам текста программы
         for (vcai::size ind{}; ind <= len; ++ind) {
             char chr{txt[ind]};
             if (chr != ' ' and chr != '\n' and chr != '\0') {
                 word.push_back(chr);
             } else {
                 if (not word.is_empty()) {
+                    // Слово - ярлык
                     if (word.back() == ':')
                         Labels.push_back(vcai::move(word),
                                          static_cast<i64>(prog.size()));
                     else
                         line.push_back(vcai::move(word));
                 }
-                if (chr == '\n' or chr == '\0') {
+                if (chr == '\n' or chr == 0) {
+                    // Строка - комментарий
                     if (not line.is_empty() and line[0].front() != '#')
                         prog.push_back(vcai::move(line));
                     else
@@ -613,7 +671,57 @@ struct Interpreter {
         }
     }
 
-    constexpr auto Exec() -> void {}
+    static constexpr auto call_fn3(const String &func, i64 *dst, i64 *src1,
+                                   i64 *src2) noexcept -> void {
+        if (func == "add")
+            add(*dst, *src1, *src2);
+        else if (func == "sub")
+            sub(*dst, *src1, *src2);
+        else if (func == "mul")
+            mul(*dst, *src1, *src2);
+        else if (func == "div")
+            div(*dst, *src1, *src2);
+        else if (func == "mod")
+            mod(*dst, *src1, *src2);
+    }
+
+    [[nodiscard]] constexpr auto deref(const String &str) noexcept -> i64 {
+        String regname{&str[1]};
+        i64 reg{StrToIR.find(regname)};
+        if (reg != -1) return *StrToIR[regname];
+
+        reg = StrToAR.find(regname);
+        if (reg != -1) return *StrToAR[regname];
+
+        return -1;
+    }
+
+    constexpr auto Exec() -> void {
+        for (auto &line : prog) {
+            auto func{line[0]};
+            switch (line.size()) {
+                case 4:
+                    i64 *args[3];
+                    for (vcai::size aind{1}; aind < 4; ++aind) {
+                        if (line[aind].front() == '&') {
+                            auto ind{deref(line[aind])};
+                            // TODO(spff): Проверить SP
+                            if (ind != -1) args[aind] = &Stack[ind];
+                        }
+                    }
+                    break;
+                case 3:
+                    fmt::print("3\n");
+                    break;
+                case 2:
+                    fmt::print("2\n");
+                    break;
+                case 1:
+                    if (func == "ret") ret();
+                    break;
+            }
+        }
+    }
 
     friend constexpr auto exec_fn(const char *txt) noexcept;
 };
