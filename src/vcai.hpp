@@ -266,8 +266,8 @@ struct BasicString {
     [[nodiscard]] constexpr auto to_i64() const noexcept -> i64 {
         if (m_size == 0) return -1;
 
-        i64 ret{}, icount{};
-        for (i64 ind{static_cast<i64>(m_size - 1)}; ind >= 0; --ind) {
+        i64 ret{}, icount{}, ind{static_cast<i64>(m_size - 1)};
+        for (; ind >= 0; --ind) {
             auto chr{data[ind]};
             if (chr >= '0' and chr <= '9') {
                 // 48 - ноль в ASCII
@@ -583,7 +583,7 @@ class Interpreter {
         } else if (dst > src) {
             SF = false;
             ZF = false;
-        } else if (dst == src)
+        } else
             ZF = true;
     }
 
