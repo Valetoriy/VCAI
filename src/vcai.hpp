@@ -1,6 +1,15 @@
 #pragma once
 
-#include <fmt/core.h>
+/*
+__     ______    _    ___
+\ \   / / ___|  / \  |_ _|
+ \ \ / / |     / _ \  | |
+  \ V /| |___ / ___ \ | |
+   \_/  \____/_/   \_\___|
+Valetoriy Constexpr ASM Interpreter
+
+(c) shadolproff @ github.com/Valetoriy
+*/
 
 namespace vcai {
 
@@ -8,8 +17,6 @@ static_assert(sizeof(long) == 8,  // NOLINT magic numbers
               "Для i64 нужен 8-байтный целочисленный тип данных!");
 using i64 = long;
 
-// Не очень-то и нужен...
-// Просто аналог std::size_t
 static_assert(
     sizeof(unsigned long) == 8,  // NOLINT magic numbers
     "Для size нужен 8-байтный целочисленный положительный тип данных!");
@@ -47,7 +54,6 @@ struct StaticArray {
     [[nodiscard]] constexpr auto begin() const noexcept { return data; };
     [[nodiscard]] constexpr auto end() const noexcept { return data + Size; };
 
-    // TODO(shadolproff): протестировать std::array в CE
     Contained data[Size];
 };
 
@@ -387,8 +393,6 @@ struct StaticMap {
         for (i64 ind{}; ind < static_cast<i64>(Size); ++ind)
             if (keys[ind] == key) return ind;
 
-        // TODO(shadolproff): добавить универсальный механизм обработки
-        // ошибок
         return -1;
     }
 
@@ -485,15 +489,14 @@ struct DynamicMap {
     vcai::size m_capacity{};
 };
 
-// Для ASM
-struct Interpreter {
-    i64 IntReg[4]{};
-    i64 ArgReg[4]{};
-    i64 SP{}, BP{}, PC{};
+class Interpreter {
+    StaticArray<i64, 4> IntReg{};
+    StaticArray<i64, 4> ArgReg{};
+    i64 SP{}, PC{};
     bool ZF{}, SF{};
 
-    static constexpr vcai::size STACKSIZE{128};
-    i64 Stack[STACKSIZE]{};
+    static constexpr size STACKSIZE{128};
+    StaticArray<i64, STACKSIZE> Stack{};
     DynamicArray<i64> CallStack;
     DynamicMap<String, i64> Labels;
 
@@ -552,7 +555,7 @@ struct Interpreter {
         dst %= src1;
     }
 
-    constexpr auto cmp(i64 &dst, const i64 &src) noexcept -> void {
+    constexpr auto cmp(const i64 &dst, const i64 &src) noexcept -> void {
         if (dst < src) {
             SF = true;
             ZF = false;
@@ -592,45 +595,45 @@ struct Interpreter {
 
     static constexpr auto dec(i64 &dst) noexcept -> void { --dst; }
 
-    constexpr auto jmp(i64 &dst) noexcept -> void { PC = dst; }
+    constexpr auto jmp(i64 &dst) noexcept -> void { PC = dst - 1; }
 
     constexpr auto jl(i64 &dst) noexcept -> void {
-        if (SF) PC = dst;
+        if (SF and !ZF) PC = dst - 1;
     }
 
     constexpr auto je(i64 &dst) noexcept -> void {
-        if (ZF) PC = dst;
+        if (ZF) PC = dst - 1;
     }
 
     constexpr auto jne(i64 &dst) noexcept -> void {
-        if (!ZF) PC = dst;
+        if (!ZF) PC = dst - 1;
     }
 
     constexpr auto jg(i64 &dst) noexcept -> void {
-        if (!SF) PC = dst;
+        if (!SF and !ZF) PC = dst - 1;
     }
 
     constexpr auto jle(i64 &dst) noexcept -> void {
-        if (ZF or SF) PC = dst;
+        if (ZF or SF) PC = dst - 1;
     }
 
     constexpr auto jge(i64 &dst) noexcept -> void {
-        if (ZF or !SF) PC = dst;
+        if (ZF or !SF) PC = dst - 1;
     }
 
     constexpr auto call(i64 &dst) noexcept -> void {
-        CallStack.push_back(PC + 1);
-        PC = dst;
+        CallStack.push_back(PC);
+        PC = dst - 1;
     }
 
     constexpr auto push(i64 &dst) noexcept -> void {
-        Stack[SP] = dst;
+        Stack[static_cast<size>(SP)] = dst;
         ++SP;
     }
 
     constexpr auto pop(i64 &dst) noexcept -> void {
         --SP;
-        dst = Stack[SP];
+        dst = Stack[static_cast<size>(SP)];
     }
 
     // Операции без аргументов
@@ -641,28 +644,34 @@ struct Interpreter {
 
     DynamicArray<DynamicArray<String>> prog;
 
-    constexpr auto ToWordArray(const char *txt) -> void {
+    constexpr auto ToWordArray(const char *txt) noexcept  // NOLINT complexity
+        -> void {
         auto len{vcai::strlen(txt)};
 
         DynamicArray<String> line;
         String word;
         // Проходимся по всем символам текста программы
-        for (vcai::size ind{}; ind <= len; ++ind) {
+        for (size ind{}; ind <= len; ++ind) {
             char chr{txt[ind]};
             if (chr != ' ' and chr != '\n' and chr != '\0') {
                 word.push_back(chr);
             } else {
                 if (not word.is_empty()) {
-                    // Слово - ярлык
-                    if (word.back() == ':')
+                    if (word.back() == ':') {
+                        // Слово - ярлык
+                        if (word == "main:") {  // main: - начало программы
+                            CallStack.push_back(0);
+                            PC = static_cast<int>(prog.size());
+                        }
+                        word.pop_back();  // Избавляемся от ':'
                         Labels.push_back(vcai::move(word),
                                          static_cast<i64>(prog.size()));
-                    else
+                    } else
                         line.push_back(vcai::move(word));
                 }
                 if (chr == '\n' or chr == 0) {
-                    // Строка - комментарий
                     if (not line.is_empty() and line[0].front() != '#')
+                        // Строка - комментарий
                         prog.push_back(vcai::move(line));
                     else
                         line.clear();
@@ -685,7 +694,64 @@ struct Interpreter {
             mod(*dst, *src1, *src2);
     }
 
-    [[nodiscard]] constexpr auto deref(const String &str) noexcept -> i64 {
+    constexpr auto call_fn2(const String &func, i64 *dst, i64 *src) noexcept
+        -> void {
+        if (func == "add")
+            add(*dst, *src);
+        else if (func == "sub")
+            sub(*dst, *src);
+        else if (func == "mul")
+            mul(*dst, *src);
+        else if (func == "div")
+            div(*dst, *src);
+        else if (func == "mod")
+            mod(*dst, *src);
+        else if (func == "cmp")
+            cmp(*dst, *src);
+        else if (func == "mov")
+            mov(*dst, *src);
+        else if (func == "shl")
+            shl(*dst, *src);
+        else if (func == "shr")
+            shr(*dst, *src);
+        else if (func == "xor")
+            v_xor(*dst, *src);
+        else if (func == "and")
+            v_and(*dst, *src);
+        else if (func == "or")
+            v_or(*dst, *src);
+    }
+
+    constexpr auto call_fn1(const String &func, i64 *dst) noexcept -> void {
+        if (func == "inc")
+            inc(*dst);
+        else if (func == "dec")
+            dec(*dst);
+        else if (func == "jmp")
+            jmp(*dst);
+        else if (func == "jl")
+            jl(*dst);
+        else if (func == "je")
+            je(*dst);
+        else if (func == "jne")
+            jne(*dst);
+        else if (func == "jg")
+            jg(*dst);
+        else if (func == "jle")
+            jle(*dst);
+        else if (func == "jge")
+            jge(*dst);
+        else if (func == "call")
+            call(*dst);
+        else if (func == "push")
+            push(*dst);
+        else if (func == "pop")
+            pop(*dst);
+    }
+
+    [[nodiscard]] constexpr auto deref(const String &str) const noexcept
+        -> i64 {
+        // Первый символ = '&'
         String regname{&str[1]};
         i64 reg{StrToIR.find(regname)};
         if (reg != -1) return *StrToIR[regname];
@@ -696,42 +762,69 @@ struct Interpreter {
         return -1;
     }
 
-    constexpr auto Exec() -> void {
-        for (auto &line : prog) {
-            auto func{line[0]};
-            switch (line.size()) {
-                case 4:
-                    i64 *args[3];
-                    for (vcai::size aind{1}; aind < 4; ++aind) {
-                        if (line[aind].front() == '&') {
-                            auto ind{deref(line[aind])};
-                            // TODO(spff): Проверить SP
-                            if (ind != -1) args[aind] = &Stack[ind];
-                        }
-                    }
-                    break;
-                case 3:
-                    fmt::print("3\n");
-                    break;
-                case 2:
-                    fmt::print("2\n");
-                    break;
-                case 1:
-                    if (func == "ret") ret();
-                    break;
+    [[nodiscard]] constexpr auto Exec() noexcept -> i64 {
+        const auto prog_size{prog.size()};
+        // Для завершения работы интерпретатор должен дойти до конца файла либо
+        // опустошить CallStack
+        while (PC < static_cast<i64>(prog_size) and !CallStack.is_empty()) {
+            auto &line = prog[static_cast<size>(PC)];
+
+            StaticArray<i64 *, 3> lvalues{0, 0, 0};
+            StaticArray<i64, 3> rvalues{0, 0, 0};
+
+            const auto line_size{line.size()};
+            for (size aind{1}; aind < line_size; ++aind) {
+                if (StrToIR.find(line[aind]) != -1)
+                    // Слово - регистр r0-3
+                    lvalues[aind - 1] = StrToIR[line[aind]];
+                else if (StrToAR.find(line[aind]) != -1)
+                    // Слово - регистр a0-3
+                    lvalues[aind - 1] = StrToAR[line[aind]];
+                else if (line[aind].front() == '&') {
+                    // Слово - указатель на адрес в стеке
+                    auto ind{deref(line[aind])};
+                    if (ind != -1 && ind < SP)
+                        lvalues[aind - 1] = &Stack[static_cast<size>(ind)];
+                } else if (Labels.find(line[aind]) != -1)
+                    // Слово - ярлык
+                    lvalues[aind - 1] = &Labels[line[aind]];
+                else {
+                    // Слово - целочисленная константа
+                    rvalues[aind - 1] = line[aind].to_i64();
+                    lvalues[aind - 1] = &rvalues[aind - 1];
+                }
             }
-        }
+
+            // В отличие от регистров, с функциями трюк со StaticMap не работает
+            // (по крайнем мере, у меня не вышло)
+            auto func{line[0]};
+            if (line_size == 4)
+                call_fn3(func, lvalues[0], lvalues[1], lvalues[2]);
+            else if (line_size == 3)
+                call_fn2(func, lvalues[0], lvalues[1]);
+            else if (line_size == 2)
+                call_fn1(func, lvalues[0]);
+            else if (line_size == 1)
+                if (func == "ret") ret();
+
+            ++PC;
+        }  // while
+
+        return IntReg[0];
     }
 
-    friend constexpr auto exec_fn(const char *txt) noexcept;
+    // Нельзя создавать вне exec_fn()
+    Interpreter() = default;
+
+    friend constexpr auto exec_fn(const char *txt) noexcept -> i64;
 };
 
-[[nodiscard]] constexpr auto exec_fn(const char *txt) noexcept {
-    [[maybe_unused]] Interpreter interp{};
+[[nodiscard]] constexpr auto exec_fn(const char *txt) noexcept -> i64 {
+    Interpreter interp{};
     interp.ToWordArray(txt);
-    interp.Exec();
+    i64 ret{interp.Exec()};
 
-    return interp.IntReg[0];
+    return ret;
 }
 
 }  // namespace vcai
