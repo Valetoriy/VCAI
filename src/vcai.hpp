@@ -237,6 +237,32 @@ struct BasicString {
         return data[m_size - 1];
     }
 
+    [[nodiscard]] constexpr auto is_func() const noexcept -> bool {
+        StaticArray funcs{"add",  "sub",  "mul", "div", "mod", "cmp", "mov",
+                          "shl",  "shr",  "xor", "and", "or",  "inc", "dec",
+                          "jmp",  "jl",   "je",  "jne", "jg",  "jle", "jge",
+                          "call", "push", "pop", "ret"};
+
+        for (vcai::size ind{}; ind < funcs.size(); ++ind)
+            if (*this == funcs[ind]) return true;
+
+        return false;
+    }
+
+    [[nodiscard]] constexpr auto is_i64() const noexcept -> bool {
+        if (m_size == 0) return false;
+
+        for (vcai::size ind{}; ind < m_size; ++ind) {
+            auto chr{data[ind]};
+            if (chr < '0' or chr > '9') {
+                if (chr == '-' and ind == 0) continue;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     [[nodiscard]] constexpr auto to_i64() const noexcept -> i64 {
         if (m_size == 0) return -1;
 
@@ -509,53 +535,48 @@ class Interpreter {
         {&ArgReg[0], &ArgReg[1], &ArgReg[2], &ArgReg[3]}};
 
     // Операции с 3 аргументами
-    static constexpr auto add(i64 &dst, const i64 &src1,
-                              const i64 &src2) noexcept -> void {
+    static constexpr auto add(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 + src2;
     }
 
-    static constexpr auto sub(i64 &dst, const i64 &src1,
-                              const i64 &src2) noexcept -> void {
+    static constexpr auto sub(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 - src2;
     }
 
-    static constexpr auto mul(i64 &dst, const i64 &src1,
-                              const i64 &src2) noexcept -> void {
+    static constexpr auto mul(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 * src2;
     }
 
-    static constexpr auto div(i64 &dst, const i64 &src1,
-                              const i64 &src2) noexcept -> void {
+    static constexpr auto div(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 / src2;
     }
 
-    static constexpr auto mod(i64 &dst, const i64 &src1,
-                              const i64 &src2) noexcept -> void {
+    static constexpr auto mod(i64 &dst, i64 &src1, i64 &src2) noexcept -> void {
         dst = src1 % src2;
     }
 
     // Операции с 2 аргументами
-    static constexpr auto add(i64 &dst, const i64 &src1) noexcept -> void {
+    static constexpr auto add(i64 &dst, i64 &src1) noexcept -> void {
         dst += src1;
     }
 
-    static constexpr auto sub(i64 &dst, const i64 &src1) noexcept -> void {
+    static constexpr auto sub(i64 &dst, i64 &src1) noexcept -> void {
         dst -= src1;
     }
 
-    static constexpr auto mul(i64 &dst, const i64 &src1) noexcept -> void {
+    static constexpr auto mul(i64 &dst, i64 &src1) noexcept -> void {
         dst *= src1;
     }
 
-    static constexpr auto div(i64 &dst, const i64 &src1) noexcept -> void {
+    static constexpr auto div(i64 &dst, i64 &src1) noexcept -> void {
         dst /= src1;
     }
 
-    static constexpr auto mod(i64 &dst, const i64 &src1) noexcept -> void {
+    static constexpr auto mod(i64 &dst, i64 &src1) noexcept -> void {
         dst %= src1;
     }
 
-    constexpr auto cmp(const i64 &dst, const i64 &src) noexcept -> void {
+    constexpr auto cmp(i64 &dst, i64 &src) noexcept -> void {
         if (dst < src) {
             SF = true;
             ZF = false;
@@ -566,27 +587,27 @@ class Interpreter {
             ZF = true;
     }
 
-    static constexpr auto mov(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto mov(i64 &dst, i64 &src) noexcept -> void {
         dst = src;
     }
 
-    static constexpr auto shl(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto shl(i64 &dst, i64 &src) noexcept -> void {
         dst <<= src;  // NOLINT binary op on int
     }
 
-    static constexpr auto shr(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto shr(i64 &dst, i64 &src) noexcept -> void {
         dst >>= src;  // NOLINT binary op on int
     }
 
-    static constexpr auto v_xor(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto v_xor(i64 &dst, i64 &src) noexcept -> void {
         dst ^= src;  // NOLINT binary op on int
     }
 
-    static constexpr auto v_and(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto v_and(i64 &dst, i64 &src) noexcept -> void {
         dst &= src;  // NOLINT binary op on int
     }
 
-    static constexpr auto v_or(i64 &dst, const i64 &src) noexcept -> void {
+    static constexpr auto v_or(i64 &dst, i64 &src) noexcept -> void {
         dst |= src;  // NOLINT binary op on int
     }
 
@@ -692,6 +713,8 @@ class Interpreter {
             div(*dst, *src1, *src2);
         else if (func == "mod")
             mod(*dst, *src1, *src2);
+        else                  // Синтаксическая ошибка
+            *(i64 *)0 = -12;  // NOLINT magic numbers
     }
 
     constexpr auto call_fn2(const String &func, i64 *dst, i64 *src) noexcept
@@ -720,6 +743,8 @@ class Interpreter {
             v_and(*dst, *src);
         else if (func == "or")
             v_or(*dst, *src);
+        else                  // Синтаксическая ошибка
+            *(i64 *)0 = -12;  // NOLINT magic numbers
     }
 
     constexpr auto call_fn1(const String &func, i64 *dst) noexcept -> void {
@@ -747,6 +772,8 @@ class Interpreter {
             push(*dst);
         else if (func == "pop")
             pop(*dst);
+        else                  // Синтаксическая ошибка
+            *(i64 *)0 = -12;  // NOLINT magic numbers
     }
 
     [[nodiscard]] constexpr auto deref(const String &str) const noexcept
@@ -762,7 +789,7 @@ class Interpreter {
         return -1;
     }
 
-    [[nodiscard]] constexpr auto Exec() noexcept -> i64 {
+    [[nodiscard]] constexpr auto Exec() noexcept -> i64 {  // NOLINT complexity
         const auto prog_size{prog.size()};
         // Для завершения работы интерпретатор должен дойти до конца файла либо
         // опустошить CallStack
@@ -788,7 +815,7 @@ class Interpreter {
                 } else if (Labels.find(line[aind]) != -1)
                     // Слово - ярлык
                     lvalues[aind - 1] = &Labels[line[aind]];
-                else {
+                else if (line[aind].is_i64()) {
                     // Слово - целочисленная константа
                     rvalues[aind - 1] = line[aind].to_i64();
                     lvalues[aind - 1] = &rvalues[aind - 1];
@@ -797,15 +824,16 @@ class Interpreter {
 
             // В отличие от регистров, с функциями трюк со StaticMap не работает
             // (по крайнем мере, у меня не вышло)
-            auto func{line[0]};
+            String *func{};
+            if (line[0].is_func()) func = &line[0];
             if (line_size == 4)
-                call_fn3(func, lvalues[0], lvalues[1], lvalues[2]);
+                call_fn3(*func, lvalues[0], lvalues[1], lvalues[2]);
             else if (line_size == 3)
-                call_fn2(func, lvalues[0], lvalues[1]);
+                call_fn2(*func, lvalues[0], lvalues[1]);
             else if (line_size == 2)
-                call_fn1(func, lvalues[0]);
+                call_fn1(*func, lvalues[0]);
             else if (line_size == 1)
-                if (func == "ret") ret();
+                if (*func == "ret") ret();
 
             ++PC;
         }  // while
