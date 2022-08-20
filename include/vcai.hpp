@@ -576,11 +576,11 @@ class Interpreter {
         dst %= src1;
     }
 
-    constexpr auto cmp(i64 &dst, i64 &src) noexcept -> void {
-        if (dst < src) {
+    constexpr auto cmp(i64 &src1, i64 &src2) noexcept -> void {
+        if (src1 < src2) {
             SF = true;
             ZF = false;
-        } else if (dst > src) {
+        } else if (src1 > src2) {
             SF = false;
             ZF = false;
         } else
@@ -678,7 +678,7 @@ class Interpreter {
                 word.push_back(chr);
             } else {
                 if (not word.is_empty()) {
-                    if (word.back() == ':') {
+                    if (word.back() == ':' and line.is_empty()) {
                         // Слово - ярлык
                         if (word == "main:") {  // main: - начало программы
                             CallStack.push_back(0);
@@ -807,6 +807,9 @@ class Interpreter {
                 else if (StrToAR.find(line[aind]) != -1)
                     // Слово - регистр a0-3
                     lvalues[aind - 1] = StrToAR[line[aind]];
+                else if (line[aind] == "sp")
+                    // Слово - регистр SP
+                    lvalues[aind - 1] = &SP;
                 else if (line[aind].front() == '&') {
                     // Слово - указатель на адрес в стеке
                     auto ind{deref(line[aind])};
